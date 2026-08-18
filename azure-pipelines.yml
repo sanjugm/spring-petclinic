@@ -23,6 +23,7 @@ stages:
         gitleaks detect --source . --redact --verbose
       displayName: "Run Gitleaks"
 
+
 - stage: Lint
   displayName: "Lint"
   dependsOn: Security
@@ -53,6 +54,7 @@ stages:
         javaHomeOption: 'JDKVersion'
         jdkVersionOption: '17'
         mavenVersionOption: 'Default'
+
 
 - stage: Build
   displayName: "Build and Test"
@@ -86,6 +88,19 @@ stages:
         javaHomeOption: 'JDKVersion'
         jdkVersionOption: '17'
         mavenVersionOption: 'Default'
+
+    - script: |
+        echo "Generated artifacts:"
+        ls -lh target/
+      displayName: "Verify Build Artifact"
+
+    - task: PublishPipelineArtifact@1
+      displayName: "Publish Versioned Artifact"
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/target'
+        artifact: 'spring-petclinic-$(Build.BuildNumber)'
+        publishLocation: 'pipeline'
+
 
 - stage: Terraform
   displayName: "Terraform Validation"
@@ -136,9 +151,14 @@ stages:
       env:
         TF_VAR_ssh_public_key: $(ssh_public_key)
 
-    - script: |
-        cd terraform
-        terraform plan
+    - task: AzureCLI@2
       displayName: "Terraform Plan"
+      inputs:
+        azureSubscription: 'sc-petclinic-azure'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          cd terraform
+          terraform plan
       env:
         TF_VAR_ssh_public_key: $(ssh_public_key)
