@@ -5,6 +5,7 @@ trigger:
 
 pool:
   vmImage: 'ubuntu-latest'
+
 stages:
 
 - stage: Security
@@ -58,5 +59,38 @@ stages:
         publishJUnitResults: true
         testResultsFiles: '**/surefire-reports/TEST-*.xml'
         javaHomeOption: 'JDKVersion'
-        jdkVersionOption: '1.17'
-        mavenVersionOption: 'Default'
+        jdkVersionOption: 'Default'
+
+- stage: Terraform
+  displayName: "Terraform Validation"
+  dependsOn: Build
+  jobs:
+  - job: Terraform
+    displayName: "Terraform Init Validate Plan"
+    steps:
+    - checkout: self
+
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y gnupg software-properties-common
+        wget -O- https://apt.releases.hashicorp.com/gpg | \
+          gpg --dearmor | \
+          sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+          https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+          sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+        sudo apt-get update
+        sudo apt-get install -y terraform
+
+        terraform version
+      displayName: "Install Terraform"
+
+    - script: |
+        cd terraform
+        terraform init
+        terraform fmt -check
+        terraform validate
+        terraform plan
+      displayName: "Terraform Init Validate Plan"
