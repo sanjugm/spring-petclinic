@@ -15,3 +15,9 @@ variable "project_name" {
   type        = string
   default     = "petclinic-e2e"
 }
+
+variable "ssh_public_key" {
+  description = "SSH public key for VM"
+  type        = string
+  sensitive   = true
+}
