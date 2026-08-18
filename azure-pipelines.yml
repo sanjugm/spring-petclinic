@@ -8,11 +8,16 @@ pool:
 
 stages:
 
+# =========================================================
+# 1. SECURITY SCAN
+# =========================================================
 - stage: Security
   displayName: "Security Scan"
+
   jobs:
   - job: Gitleaks
     displayName: "Gitleaks Secret Scan"
+
     steps:
     - checkout: self
       fetchDepth: 0
@@ -23,14 +28,32 @@ stages:
         gitleaks detect --source . --redact --verbose
       displayName: "Run Gitleaks"
 
+
+# =========================================================
+# 2. LINT
+# =========================================================
 - stage: Lint
   displayName: "Lint"
   dependsOn: Security
+
   jobs:
   - job: Checkstyle
     displayName: "Maven Checkstyle"
+
     steps:
     - checkout: self
+
+    - task: JavaToolInstaller@0
+      displayName: "Setup Java 17"
+      inputs:
+        versionSpec: '17'
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - script: |
+        java -version
+        echo "JAVA_HOME=$JAVA_HOME"
+      displayName: "Verify Java 17"
 
     - task: Maven@4
       displayName: "Run Maven Validate / Checkstyle"
@@ -39,17 +62,36 @@ stages:
         goals: 'validate'
         publishJUnitResults: false
         javaHomeOption: 'JDKVersion'
-        jdkVersionOption: '1.17'
+        jdkVersionOption: '17'
         mavenVersionOption: 'Default'
 
+
+# =========================================================
+# 3. BUILD AND TEST
+# =========================================================
 - stage: Build
   displayName: "Build and Test"
   dependsOn: Lint
+
   jobs:
   - job: MavenBuild
     displayName: "Maven Build"
+
     steps:
     - checkout: self
+
+    - task: JavaToolInstaller@0
+      displayName: "Setup Java 17"
+      inputs:
+        versionSpec: '17'
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - script: |
+        java -version
+        echo "JAVA_HOME=$JAVA_HOME"
+        mvn -version
+      displayName: "Verify Java and Maven"
 
     - task: Maven@4
       displayName: "Maven Clean Verify"
@@ -59,26 +101,36 @@ stages:
         publishJUnitResults: true
         testResultsFiles: '**/surefire-reports/TEST-*.xml'
         javaHomeOption: 'JDKVersion'
-        jdkVersionOption: 'Default'
+        jdkVersionOption: '17'
+        mavenVersionOption: 'Default'
 
+
+# =========================================================
+# 4. TERRAFORM
+# =========================================================
 - stage: Terraform
   displayName: "Terraform Validation"
   dependsOn: Build
+
   jobs:
   - job: Terraform
     displayName: "Terraform Init Validate Plan"
+
     steps:
     - checkout: self
 
+    # Install Terraform
     - script: |
         sudo apt-get update
-        sudo apt-get install -y gnupg software-properties-common
+        sudo apt-get install -y gnupg software-properties-common wget
+
         wget -O- https://apt.releases.hashicorp.com/gpg | \
           gpg --dearmor | \
           sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
 
         echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
-          https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+          https://apt.releases.hashicorp.com \
+          $(lsb_release -cs) main" | \
           sudo tee /etc/apt/sources.list.d/hashicorp.list
 
         sudo apt-get update
@@ -87,10 +139,26 @@ stages:
         terraform version
       displayName: "Install Terraform"
 
+    # Terraform formatting
+    - script: |
+        cd terraform
+        terraform fmt -check
+      displayName: "Terraform Format Check"
+
+    # Terraform initialization
     - script: |
         cd terraform
         terraform init
-        terraform fmt -check
+      displayName: "Terraform Init"
+
+    # Terraform validation
+    - script: |
+        cd terraform
         terraform validate
+      displayName: "Terraform Validate"
+
+    # Terraform plan
+    - script: |
+        cd terraform
         terraform plan
-      displayName: "Terraform Init Validate Plan"
+      displayName: "Terraform Plan"
