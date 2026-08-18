@@ -8,16 +8,11 @@ pool:
 
 stages:
 
-# =========================================================
-# 1. SECURITY SCAN
-# =========================================================
 - stage: Security
   displayName: "Security Scan"
-
   jobs:
   - job: Gitleaks
     displayName: "Gitleaks Secret Scan"
-
     steps:
     - checkout: self
       fetchDepth: 0
@@ -28,18 +23,12 @@ stages:
         gitleaks detect --source . --redact --verbose
       displayName: "Run Gitleaks"
 
-
-# =========================================================
-# 2. LINT
-# =========================================================
 - stage: Lint
   displayName: "Lint"
   dependsOn: Security
-
   jobs:
   - job: Checkstyle
     displayName: "Maven Checkstyle"
-
     steps:
     - checkout: self
 
@@ -65,18 +54,12 @@ stages:
         jdkVersionOption: '17'
         mavenVersionOption: 'Default'
 
-
-# =========================================================
-# 3. BUILD AND TEST
-# =========================================================
 - stage: Build
   displayName: "Build and Test"
   dependsOn: Lint
-
   jobs:
   - job: MavenBuild
     displayName: "Maven Build"
-
     steps:
     - checkout: self
 
@@ -104,22 +87,19 @@ stages:
         jdkVersionOption: '17'
         mavenVersionOption: 'Default'
 
-
-# =========================================================
-# 4. TERRAFORM
-# =========================================================
 - stage: Terraform
   displayName: "Terraform Validation"
   dependsOn: Build
-
   jobs:
   - job: Terraform
     displayName: "Terraform Init Validate Plan"
 
+    variables:
+    - group: terraform-secrets
+
     steps:
     - checkout: self
 
-    # Install Terraform
     - script: |
         sudo apt-get update
         sudo apt-get install -y gnupg software-properties-common wget
@@ -139,26 +119,26 @@ stages:
         terraform version
       displayName: "Install Terraform"
 
-    # Terraform formatting
     - script: |
         cd terraform
         terraform fmt -check
       displayName: "Terraform Format Check"
 
-    # Terraform initialization
     - script: |
         cd terraform
         terraform init
       displayName: "Terraform Init"
 
-    # Terraform validation
     - script: |
         cd terraform
         terraform validate
       displayName: "Terraform Validate"
+      env:
+        TF_VAR_ssh_public_key: $(ssh_public_key)
 
-    # Terraform plan
     - script: |
         cd terraform
         terraform plan
       displayName: "Terraform Plan"
+      env:
+        TF_VAR_ssh_public_key: $(ssh_public_key)
