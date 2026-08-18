@@ -1,0 +1,62 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: B13-pool
+stages:
+
+- stage: Security
+  displayName: "Security Scan"
+  jobs:
+  - job: Gitleaks
+    displayName: "Gitleaks Secret Scan"
+    steps:
+    - checkout: self
+      fetchDepth: 0
+
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y gitleaks
+        gitleaks detect --source . --redact --verbose
+      displayName: "Run Gitleaks"
+
+- stage: Lint
+  displayName: "Lint"
+  dependsOn: Security
+  jobs:
+  - job: Checkstyle
+    displayName: "Maven Checkstyle"
+    steps:
+    - checkout: self
+
+    - task: Maven@4
+      displayName: "Run Maven Validate / Checkstyle"
+      inputs:
+        mavenPomFile: 'pom.xml'
+        goals: 'validate'
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.17'
+        mavenVersionOption: 'Default'
+
+- stage: Build
+  displayName: "Build and Test"
+  dependsOn: Lint
+  jobs:
+  - job: MavenBuild
+    displayName: "Maven Build"
+    steps:
+    - checkout: self
+
+    - task: Maven@4
+      displayName: "Maven Clean Verify"
+      inputs:
+        mavenPomFile: 'pom.xml'
+        goals: 'clean verify'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.17'
+        mavenVersionOption: 'Default'
