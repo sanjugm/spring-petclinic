@@ -25,10 +25,10 @@ resource "azurerm_linux_virtual_machine" "sonarqube" {
     azurerm_network_interface.vm.id
   ]
 
-  admin_ssh_key {
-    username   = "azureuser"
-    public_key = file("/home/sanju/.ssh/id_ed25519.pub")
-  }
+ admin_ssh_key {
+  username   = "azureuser"
+  public_key = var.ssh_public_key
+}
 
   os_disk {
     caching              = "ReadWrite"
